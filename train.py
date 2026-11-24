@@ -52,9 +52,10 @@ def get_device():
 
 
 def amp_dtype(device):
-    if device.type == "cuda" and torch.cuda.is_bf16_supported():
-        return torch.bfloat16  # Ampere+ (L4, A100): no loss scaling needed
-    return torch.float16  # T4 / MPS: needs GradScaler for training
+    # is_bf16_supported() is also True on a T4, where bf16 is only emulated (slow); require Ampere+.
+    if device.type == "cuda" and torch.cuda.get_device_capability(device)[0] >= 8:
+        return torch.bfloat16  # Ampere+ (L4, A100): native bf16, no loss scaling needed
+    return torch.float16  # T4 / MPS: fp16 tensor cores + GradScaler
 
 
 @torch.no_grad()
