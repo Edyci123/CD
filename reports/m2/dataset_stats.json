@@ -1,0 +1,293 @@
+{
+  "splits": {
+    "train": {
+      "patches": 262144,
+      "positive_frac": 0.5,
+      "slides": 216,
+      "patches_per_slide": {
+        "median": 697,
+        "min": 537,
+        "max": 3800
+      },
+      "negatives_with_tumour_outside_centre": 673,
+      "by_centre": {
+        "RUMC": {
+          "patches": 160894,
+          "slides": 137,
+          "positive_frac": 0.4785
+        },
+        "UMCU": {
+          "patches": 101250,
+          "slides": 79,
+          "positive_frac": 0.5342
+        }
+      },
+      "slides_by_type": {
+        "normal": 128,
+        "tumor": 88
+      },
+      "patches_from_normal_slides": 82424
+    },
+    "valid": {
+      "patches": 32768,
+      "positive_frac": 0.4995,
+      "slides": 54,
+      "patches_per_slide": {
+        "median": 345,
+        "min": 259,
+        "max": 1728
+      },
+      "negatives_with_tumour_outside_centre": 89,
+      "by_centre": {
+        "RUMC": {
+          "patches": 20521,
+          "slides": 33,
+          "positive_frac": 0.4751
+        },
+        "UMCU": {
+          "patches": 12247,
+          "slides": 21,
+          "positive_frac": 0.5405
+        }
+      },
+      "slides_by_type": {
+        "normal": 32,
+        "tumor": 22
+      },
+      "patches_from_normal_slides": 10261
+    },
+    "test": {
+      "patches": 32768,
+      "positive_frac": 0.4998,
+      "slides": 129,
+      "patches_per_slide": {
+        "median": 140,
+        "min": 98,
+        "max": 716
+      },
+      "negatives_with_tumour_outside_centre": 97,
+      "by_centre": {
+        "test (mixed)": {
+          "patches": 32768,
+          "slides": 129,
+          "positive_frac": 0.4998
+        }
+      }
+    }
+  },
+  "slide_overlap": {
+    "train&valid": 0,
+    "train&test": 0,
+    "valid&test": 0
+  },
+  "missing_values_in_metadata": {
+    "train": 0,
+    "valid": 0,
+    "test": 0
+  },
+  "quality": {
+    "train": {
+      "duplicate_patches": 57354,
+      "unique_patches": 220025,
+      "duplicates_with_conflicting_labels": 0,
+      "background_patches(>90% white)": 4548,
+      "background_patches_positive": 173,
+      "mean_intensity_by_class": {
+        "normal": 168.68,
+        "tumour": 159.55
+      }
+    },
+    "valid": {
+      "duplicate_patches": 6841,
+      "unique_patches": 28108,
+      "duplicates_with_conflicting_labels": 0,
+      "background_patches(>90% white)": 517,
+      "background_patches_positive": 0,
+      "mean_intensity_by_class": {
+        "normal": 170.51,
+        "tumour": 155.92
+      }
+    },
+    "test": {
+      "duplicate_patches": 5177,
+      "unique_patches": 29383,
+      "duplicates_with_conflicting_labels": 0,
+      "background_patches(>90% white)": 572,
+      "background_patches_positive": 11,
+      "mean_intensity_by_class": {
+        "normal": 169.15,
+        "tumour": 152.71
+      }
+    },
+    "identical_patches_train&valid": 0,
+    "identical_patches_train&test": 33,
+    "identical_patches_valid&test": 0
+  },
+  "colour_sample": {
+    "train": {
+      "all": {
+        "n": 8192,
+        "rgb_mean": [
+          0.6998999714851379,
+          0.5365999937057495,
+          0.6916999816894531
+        ],
+        "H_od_mean": 0.0365,
+        "E_od_mean": 0.0249
+      },
+      "tumour": {
+        "n": 4167,
+        "rgb_mean": [
+          0.6934000253677368,
+          0.5033000111579895,
+          0.6830999851226807
+        ],
+        "H_od_mean": 0.0354,
+        "E_od_mean": 0.0258
+      },
+      "normal": {
+        "n": 4025,
+        "rgb_mean": [
+          0.7067000269889832,
+          0.5712000131607056,
+          0.7006000280380249
+        ],
+        "H_od_mean": 0.0377,
+        "E_od_mean": 0.0239
+      },
+      "centre=RUMC": {
+        "n": 4967,
+        "rgb_mean": [
+          0.7163000106811523,
+          0.5679000020027161,
+          0.6635000109672546
+        ],
+        "H_od_mean": 0.0314,
+        "E_od_mean": 0.0201
+      },
+      "centre=UMCU": {
+        "n": 3225,
+        "rgb_mean": [
+          0.6746000051498413,
+          0.4884999990463257,
+          0.7351999878883362
+        ],
+        "H_od_mean": 0.0445,
+        "E_od_mean": 0.0322
+      }
+    },
+    "valid": {
+      "all": {
+        "n": 8192,
+        "rgb_mean": [
+          0.6969000101089478,
+          0.534500002861023,
+          0.6877999901771545
+        ],
+        "H_od_mean": 0.037,
+        "E_od_mean": 0.0249
+      },
+      "tumour": {
+        "n": 4131,
+        "rgb_mean": [
+          0.6797999739646912,
+          0.48510000109672546,
+          0.6708999872207642
+        ],
+        "H_od_mean": 0.0378,
+        "E_od_mean": 0.0274
+      },
+      "normal": {
+        "n": 4061,
+        "rgb_mean": [
+          0.7142000198364258,
+          0.5846999883651733,
+          0.7049999833106995
+        ],
+        "H_od_mean": 0.0362,
+        "E_od_mean": 0.0223
+      },
+      "centre=RUMC": {
+        "n": 5102,
+        "rgb_mean": [
+          0.7128999829292297,
+          0.5659999847412109,
+          0.6603000164031982
+        ],
+        "H_od_mean": 0.0318,
+        "E_od_mean": 0.0204
+      },
+      "centre=UMCU": {
+        "n": 3090,
+        "rgb_mean": [
+          0.6704000234603882,
+          0.48240000009536743,
+          0.7332000136375427
+        ],
+        "H_od_mean": 0.0455,
+        "E_od_mean": 0.0323
+      }
+    },
+    "test": {
+      "all": {
+        "n": 8192,
+        "rgb_mean": [
+          0.6794999837875366,
+          0.5216000080108643,
+          0.692799985408783
+        ],
+        "H_od_mean": 0.042,
+        "E_od_mean": 0.0264
+      },
+      "tumour": {
+        "n": 4095,
+        "rgb_mean": [
+          0.6541000008583069,
+          0.4690999984741211,
+          0.6812999844551086
+        ],
+        "H_od_mean": 0.0452,
+        "E_od_mean": 0.0303
+      },
+      "normal": {
+        "n": 4097,
+        "rgb_mean": [
+          0.7049999833106995,
+          0.5740000009536743,
+          0.704200029373169
+        ],
+        "H_od_mean": 0.0387,
+        "E_od_mean": 0.0225
+      }
+    }
+  },
+  "colour_only_baseline": {
+    "model": "logistic regression (L2, C=1) on 58 colour features",
+    "n_features": 58,
+    "n_train": 32768,
+    "valid": {
+      "auc": 0.8853335238994765,
+      "accuracy": 0.79736328125,
+      "precision": 0.8217049136961841,
+      "recall": 0.7590567536196469,
+      "specificity": 0.8355997316909568,
+      "f1": 0.7891394093362973,
+      "tp": 12425,
+      "tn": 13703,
+      "fp": 2696,
+      "fn": 3944
+    },
+    "test": {
+      "auc": 0.8704370284505725,
+      "accuracy": 0.794219970703125,
+      "precision": 0.8160346411232122,
+      "recall": 0.759479758197472,
+      "specificity": 0.8289305106460862,
+      "f1": 0.7867421487080554,
+      "tp": 12438,
+      "tn": 13587,
+      "fp": 2804,
+      "fn": 3939
+    }
+  }
+}
