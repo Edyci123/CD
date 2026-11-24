@@ -1,4 +1,5 @@
-"""PCam loading: images memory-mapped from a one-time .npy copy, plus nested label-budget subsets."""
+"""PCam loading: images either streamed once into GPU memory, or memory-mapped from a one-time
+.npy copy; plus nested label-budget subsets."""
 from pathlib import Path
 
 import h5py
@@ -6,6 +7,8 @@ import numpy as np
 import torch
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+SPLIT_SIZES = {"train": 262144, "valid": 32768, "test": 32768}
+PATCH_BYTES = 96 * 96 * 3
 
 
 def _npy_copy(h5_path: Path, key: str = "x", chunk: int = 8192) -> Path:
@@ -28,16 +31,42 @@ def _npy_copy(h5_path: Path, key: str = "x", chunk: int = 8192) -> Path:
     return npy
 
 
-def load_split(split: str, data_dir: Path = DATA_DIR, limit: int = 0):
-    """Return (x, y): x uint8 [N,96,96,3] (read-only memmap), y uint8 [N]. split in {train, valid, test}.
-    limit > 0 reads only the first `limit` samples into RAM (for quick debugging)."""
+def _h5_to_device(h5_path: Path, device, key: str = "x", chunk: int = 8192) -> torch.Tensor:
+    """Stream an HDF5 image array into one uint8 tensor on `device`, chunk by chunk, so host RAM
+    only ever holds one chunk. Random batch gathers then run on the GPU instead of the disk."""
+    with h5py.File(h5_path, "r") as f:
+        d = f[key]
+        out = torch.empty(d.shape, dtype=torch.uint8, device=device)
+        for i in range(0, len(d), chunk):
+            out[i : i + chunk] = torch.from_numpy(d[i : i + chunk]).to(device)
+    return out
+
+
+def fits_on_device(device, splits=("train", "valid"), margin_gb: float = 4.0) -> bool:
+    """True if `splits` fit in free CUDA memory with `margin_gb` left for the model and activations."""
+    if device.type != "cuda":
+        return False
+    need = sum(SPLIT_SIZES[s] for s in splits) * PATCH_BYTES
+    free, _ = torch.cuda.mem_get_info(device)
+    return free > need + margin_gb * 1e9
+
+
+def load_split(split: str, data_dir: Path = DATA_DIR, limit: int = 0, device=None):
+    """Return (x, y). y is uint8 [N] (numpy). x is uint8 [N,96,96,3]:
+      - device given: a torch tensor resident on that device (fastest; needs the memory),
+      - otherwise: a read-only numpy memmap of a one-time .npy copy.
+    limit > 0 reads only the first `limit` samples (for quick debugging)."""
     stem = Path(data_dir) / f"camelyonpatch_level_2_split_{split}"
     with h5py.File(f"{stem}_y.h5", "r") as f:
         y = f["y"][:].reshape(-1)
     if limit:
         with h5py.File(f"{stem}_x.h5", "r") as f:
-            return f["x"][:limit], y[:limit]
-    x = np.load(_npy_copy(Path(f"{stem}_x.h5")), mmap_mode="r")
+            x = f["x"][:limit]
+        return (torch.from_numpy(x).to(device) if device is not None else x), y[:limit]
+    if device is not None:
+        x = _h5_to_device(Path(f"{stem}_x.h5"), device)
+    else:
+        x = np.load(_npy_copy(Path(f"{stem}_x.h5")), mmap_mode="r")
     assert len(x) == len(y), (stem, x.shape, y.shape)
     return x, y
 
@@ -57,10 +86,13 @@ def label_budget_indices(y: np.ndarray, frac: float, seed: int = 0) -> np.ndarra
 
 
 def iterate_batches(x, y, batch_size, shuffle, rng=None, indices=None):
-    """Yield (uint8 NHWC tensor, float label tensor) on CPU."""
+    """Yield (uint8 NHWC tensor, float label tensor). The image batch lives wherever x lives
+    (GPU tensor or CPU memmap); labels are always on CPU."""
     idx = np.arange(len(y)) if indices is None else indices
     if shuffle:
         idx = idx[rng.permutation(len(idx))]
+    on_device = isinstance(x, torch.Tensor)
     for i in range(0, len(idx), batch_size):
         b = np.sort(idx[i : i + batch_size])  # sorted gather is friendlier to memory
-        yield torch.from_numpy(x[b]), torch.from_numpy(y[b].astype(np.float32))
+        xb = x[torch.from_numpy(b).to(x.device)] if on_device else torch.from_numpy(x[b])
+        yield xb, torch.from_numpy(y[b].astype(np.float32))

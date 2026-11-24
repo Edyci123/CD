@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from pcam.augment import AUGMENTATIONS, normalize, to_float
-from pcam.data import iterate_batches, label_budget_indices, load_split
+from pcam.data import fits_on_device, iterate_batches, label_budget_indices, load_split
 from pcam.metrics import binary_metrics
 from pcam.model import build_resnet18
 
@@ -36,6 +36,8 @@ def parse_args():
     p.add_argument("--subset-seed", type=int, default=0)
     p.add_argument("--amp", action=argparse.BooleanOptionalAction, default=False,
                    help="mixed precision (bf16 if supported, else fp16 + GradScaler). Use on CUDA/Colab; no speedup measured on MPS, so off by default")
+    p.add_argument("--gpu-data", action=argparse.BooleanOptionalAction, default=None,
+                   help="keep the image arrays in GPU memory (default: on if CUDA has room for train+valid)")
     p.add_argument("--limit", type=int, default=0, help="debug: use only N samples per split")
     p.add_argument("--out", default="runs")
     return p.parse_args()
@@ -77,13 +79,18 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
-    xtr, ytr = load_split("train", limit=a.limit)
-    xva, yva = load_split("valid", limit=a.limit)
+    gpu_data = fits_on_device(device) if a.gpu_data is None else a.gpu_data
+    data_dev = device if gpu_data else None
+    xtr, ytr = load_split("train", limit=a.limit, device=data_dev)
+    xva, yva = load_split("valid", limit=a.limit, device=data_dev)
     train_idx = label_budget_indices(ytr, a.label_frac, a.subset_seed)
-    print(f"loaded data in {time.time() - t0:.0f}s | train {len(train_idx)} "
-          f"(frac {a.label_frac}, pos {ytr[train_idx].mean():.3f}) | valid {len(yva)} | device {device}")
+    print(f"loaded data in {time.time() - t0:.0f}s ({'GPU-resident' if gpu_data else 'memmap'}) | "
+          f"train {len(train_idx)} (frac {a.label_frac}, pos {ytr[train_idx].mean():.3f}) | "
+          f"valid {len(yva)} | device {device}", flush=True)
 
     model = build_resnet18(pretrained=not a.scratch).to(device)
+    if device.type == "cuda":
+        model = model.to(memory_format=torch.channels_last)  # NHWC kernels are faster with AMP
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=a.weight_decay)
     steps_per_epoch = math.ceil(len(train_idx) / a.batch_size)
     total = a.epochs * steps_per_epoch
@@ -95,10 +102,12 @@ def main():
     scaler = torch.amp.GradScaler(device.type, enabled=a.amp and dtype == torch.float16)
     augment = AUGMENTATIONS[a.aug]
 
-    config = {**vars(a), "device": str(device), "n_train": int(len(train_idx)), "steps_per_epoch": steps_per_epoch}
+    config = {**vars(a), "gpu_data": gpu_data, "device": str(device),
+              "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+              "torch": str(torch.__version__), "n_train": int(len(train_idx)), "steps_per_epoch": steps_per_epoch}
     (out / "config.json").write_text(json.dumps(config, indent=2))
 
-    history, best_auc = [], -1.0
+    history, best_auc, t_train = [], -1.0, time.time()
     for epoch in range(1, a.epochs + 1):
         model.train()
         t_ep, run_loss, n_seen = time.time(), 0.0, 0
@@ -130,18 +139,22 @@ def main():
         if improved:
             best_auc = vm["auc"]
             torch.save({"model": model.state_dict(), "epoch": epoch, "config": config}, out / "best.pt")
+            np.savez_compressed(out / "valid_preds.npz", y=yva, p=pva)  # for choosing thresholds on validation
         print(f"epoch {epoch}: train_loss {rec['train_loss']:.4f} val_loss {vloss:.4f} "
               f"val_auc {vm['auc']:.4f} val_acc {vm['accuracy']:.4f} val_recall {vm['recall']:.4f} "
               f"[{rec['epoch_sec']:.0f}s]{' *best*' if improved else ''}", flush=True)
 
     # Final: test set touched once, with the checkpoint chosen on validation.
+    train_sec = time.time() - t_train
     del xtr
-    xte, yte = load_split("test", limit=a.limit)
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    xte, yte = load_split("test", limit=a.limit, device=data_dev)
     ckpt = torch.load(out / "best.pt", map_location=device)
     model.load_state_dict(ckpt["model"])
     pte = predict(model, xte, yte, device, 512, a.amp)
     tm = binary_metrics(yte, pte)
-    result = {"best_epoch": ckpt["epoch"], "best_val_auc": best_auc, "test": tm}
+    result = {"best_epoch": ckpt["epoch"], "best_val_auc": best_auc, "train_minutes": train_sec / 60, "test": tm}
     (out / "test_metrics.json").write_text(json.dumps(result, indent=2))
     np.savez_compressed(out / "test_preds.npz", y=yte, p=pte)
     print(f"TEST (best epoch {ckpt['epoch']}): " + " ".join(
