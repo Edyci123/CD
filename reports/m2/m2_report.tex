@@ -4,8 +4,6 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage[hidelinks]{hyperref}
-\usepackage{xcolor}
-\newcommand{\pending}[1]{\textcolor{red}{#1}}
 
 \begin{document}
 
@@ -18,11 +16,11 @@ National University of Science and Technology POLITEHNICA Bucharest, Romania}}
 \maketitle
 
 \begin{abstract}
-We describe the data and the first results of our project on classifying $96\times96$ H\&E lymph node patches as metastatic tumour or normal tissue. We use PatchCamelyon (PCam), 327,680 labelled patches from 399 CAMELYON16 slides, and audit it for completeness, duplicates, leakage and stain variation. We then train two baselines: a logistic regression on 58 colour features and an ImageNet-pretrained ResNet-18. On the official test split they reach an AUC of 0.870 and \pending{CNN\_AUC}. These are the reference points for our colour-augmentation (RQ1) and label-budget (RQ2) experiments.
+We describe the data and the first results of our project on classifying $96\times96$ H\&E lymph node patches as metastatic tumour or normal tissue. We use PatchCamelyon (PCam), 327,680 labelled patches from 399 CAMELYON16 slides, and audit it for completeness, duplicates, leakage and stain variation. We then train two baselines: a logistic regression on 58 colour features and an ImageNet-pretrained ResNet-18. On the official test split they reach an AUC of 0.870 and 0.928; the ResNet-18 overfits after four epochs and misses 27\% of tumour patches at the default threshold.
 \end{abstract}
 
 \section{Introduction}
-Lymph node status is a key prognostic factor in breast cancer, and finding small metastases on whole-slide images (WSIs) is slow for pathologists. Our M1 review proposed two research questions on patch-level detection: whether stain-aware colour augmentation improves robustness to colour shifts (RQ1), and how ImageNet pretraining compares with training from scratch under 10\%, 25\% and 100\% of the labels (RQ2). This milestone fixes the dataset, the preprocessing and the baselines that all later experiments are compared against.
+Finding small breast cancer metastases in lymph node whole-slide images (WSIs) is slow for pathologists. Our M1 review proposed two research questions: whether stain-aware colour augmentation improves robustness to colour shifts (RQ1), and how ImageNet pretraining compares with training from scratch with 10\%, 25\% and 100\% of the labels (RQ2). This milestone fixes the dataset, preprocessing and baselines that later experiments are compared against. Code: \url{https://github.com/Edyci123/CD}.
 
 \section{Dataset}
 \subsection{Source, purpose and collection}
@@ -55,7 +53,7 @@ Test & 32,768 & 129 & 50.0\% & 29,383 & mixed \\
 \end{figure}
 
 \subsection{Data quality}
-We audited all 327,680 records. \textit{Completeness:} no label or metadata field is missing, every image has the expected shape, and every label matches the metadata centre flag. \textit{Balance:} each split is 50/50, far above clinical prevalence, so accuracy and precision are optimistic. \textit{Duplicates:} hashing the pixels shows that 16.1\% of training patches are exact copies of another training patch (only 220,025 are unique), and 14.2\% and 10.3\% for validation and test; duplicates never disagree on the label. \textit{Leakage:} the splits are slide-disjoint by name, but test slide \texttt{test\_049} is the same physical slide as training slide \texttt{tumor\_036}: 36 patches share coordinates and pixels, and 285 of its 443 test patches overlap a training patch. We therefore also report test results without this slide. \textit{Label noise:} 673 training negatives (0.26\%) contain tumour outside the centre by design, and 173 positives are more than 90\% white background. \textit{Stain variation:} UMCU patches are darker than RUMC patches (mean haematoxylin optical density 0.044 vs.\ 0.031 after colour deconvolution~\cite{ruifrok2001}) and are more often positive (53\% vs.\ 48\%), so colour carries hospital information that is correlated with the label (Fig.~\ref{fig:stain}).
+We audited all 327,680 records. \textit{Completeness:} no label or metadata field is missing, every image has the expected shape, and every label matches the metadata centre flag. \textit{Balance:} each split is 50/50, far above clinical prevalence, so accuracy and precision are optimistic. \textit{Duplicates:} hashing the pixels shows that 16.1\% of training patches are exact copies of another training patch (only 220,025 are unique), and 14.2\% and 10.3\% for validation and test; duplicates never disagree on the label. \textit{Leakage:} the splits are slide-disjoint by name, but test slide \texttt{test\_049} is the same physical slide as training slide \texttt{tumor\_036}: 36 patches share coordinates and pixels, and 285 of its 443 test patches overlap a training patch. \textit{Label noise:} 673 training negatives (0.26\%) contain tumour outside the centre by design, and 173 positives are more than 90\% white background. \textit{Stain variation:} UMCU patches are darker than RUMC patches (mean haematoxylin optical density 0.044 vs.\ 0.031 after colour deconvolution~\cite{ruifrok2001}) and are more often positive (53\% vs.\ 48\%), so colour carries hospital information that is correlated with the label (Fig.~\ref{fig:stain}).
 
 \begin{figure}[t]
 \centering
@@ -65,20 +63,54 @@ We audited all 327,680 records. \textit{Completeness:} no label or metadata fiel
 \end{figure}
 
 \subsection{Preprocessing}
-No imputation or cleaning was needed. We keep the duplicates in training so our numbers stay comparable with published PCam results, and we flag the leaked slide at evaluation. Pixels are scaled to $[0,1]$ and normalised with the ImageNet channel mean and standard deviation that the pretrained weights expect. Patches stay at their native $96\times96$ size. During training each patch gets a random element of the dihedral group (90° rotations and a horizontal flip); these 8 transforms are exact symmetries of tissue, keep the label centre in place and need no interpolation. We do not normalise stain, because RQ1 studies colour. The uint8 arrays are streamed once from HDF5 into GPU memory (8.2\,GB for train and validation) and batches are gathered there, which was 10$\times$ faster than random reads from disk on Colab.
+No imputation or cleaning was needed. We keep the duplicates in training so our numbers stay comparable with published PCam results. Pixels are scaled to $[0,1]$ and normalised with the ImageNet channel mean and standard deviation that the pretrained weights expect; patches stay at their native $96\times96$ size. During training each patch gets a random element of the dihedral group ($90^\circ$ rotations and a horizontal flip): these 8 transforms are exact symmetries of tissue, keep the label centre in place and need no interpolation. We do not normalise stain, because RQ1 studies colour. The uint8 arrays are streamed once from HDF5 into GPU memory (8.2\,GB for train and validation) and batches are gathered there; on a Colab T4 this raised throughput from 199 to about 4,700 images/s compared with random reads from disk.
 
 \section{Baselines and Metrics}
-\textit{Colour-only logistic regression.} Each patch is described by 58 colour features: the mean and standard deviation of R, G and B, of the haematoxylin and eosin optical densities~\cite{ruifrok2001}, and 16-bin histograms of each RGB channel. A standardised, L2-regularised logistic regression ($C=1$) is fitted on 32,768 random training patches. It sees no morphology, so it measures how much of the task colour alone explains.
+\textit{Colour-only logistic regression (LR).} Each patch is described by 58 colour features: the mean and standard deviation of R, G and B, of the haematoxylin and eosin optical densities~\cite{ruifrok2001}, and 16-bin histograms of each RGB channel. A standardised, L2-regularised logistic regression ($C=1$) is fitted on 32,768 random training patches. It sees no morphology, so it measures how much of the task colour alone explains.
 
-\textit{ResNet-18.} A torchvision ResNet-18~\cite{he2016} (11.2M parameters) pretrained on ImageNet~\cite{deng2009}, with the classifier replaced by a single logit and trained with binary cross-entropy. We use AdamW~\cite{loshchilov2019} (learning rate $3\cdot10^{-4}$, weight decay $10^{-4}$), batch size 256, 10 epochs, 3\% linear warm-up then cosine decay, and mixed precision, on a \pending{GPU} in Colab (\pending{N} min). The checkpoint with the best validation AUC is evaluated once on test.
+\textit{ResNet-18.} A torchvision ResNet-18~\cite{he2016} (11.2M parameters) pretrained on ImageNet~\cite{deng2009}, with the classifier replaced by a single logit and trained with binary cross-entropy on all 262,144 training patches. We use AdamW~\cite{loshchilov2019} (learning rate $3\cdot10^{-4}$, weight decay $10^{-4}$), batch size 256, 10 epochs, 3\% linear warm-up then cosine decay, and fp16 mixed precision; training took 9.7\,min on a Colab Tesla T4. The checkpoint with the best validation AUC is evaluated once on test.
 
-\textit{Metrics.} The main metric is ROC AUC, which does not depend on a threshold or on prevalence; its 95\% confidence interval comes from 1,000 bootstrap resamples of the test set. At a 0.5 threshold we also report accuracy, precision, recall (sensitivity), specificity and F1. Recall matters most clinically, since a missed metastasis is the costly error.
+\textit{Metrics.} The main metric is ROC AUC, which does not depend on a threshold or on prevalence; its 95\% confidence interval uses the Hanley--McNeil standard error. At a 0.5 threshold we also report accuracy, precision, recall (sensitivity), specificity and F1. Recall matters most clinically, since a missed metastasis is the costly error.
 
 \section{Results}
-\pending{Table~II and Fig.~3 go here once the ResNet-18 run finishes.}
+The ResNet-18 reaches a test AUC of 0.928 (Table~\ref{tab:results}), 0.058 above the colour-only LR, and the confidence intervals do not overlap. At the 0.5 threshold it is very specific (0.955) but misses 27\% of tumour patches: 4,384 false negatives against 733 false positives. Validation AUC peaked at epoch 4 (0.961; Fig.~\ref{fig:training}), while validation loss doubled from 0.30 to 0.59 by epoch 10 as training loss fell to 0.027. Removing the leaked slide \texttt{test\_049} changes the LR test AUC by less than 0.001.
+
+\begin{table}[t]
+\caption{Baseline results (threshold 0.5 for the threshold-based metrics); last two rows as published, P4M = rotation-equivariant DenseNet}
+\label{tab:results}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular}{llcccccc}
+\toprule
+Model & Split & AUC [95\% CI] & Acc & Prec & Rec & Spec & F1 \\
+\midrule
+LR & valid & 0.885 & 0.797 & 0.822 & 0.759 & 0.836 & 0.789 \\
+LR & test & 0.870 [.867, .874] & 0.794 & 0.816 & 0.760 & 0.829 & 0.787 \\
+ResNet-18 & valid & 0.961 & 0.892 & 0.937 & 0.841 & 0.943 & 0.886 \\
+ResNet-18 & test & 0.928 [.925, .931] & 0.844 & 0.942 & 0.732 & 0.955 & 0.824 \\
+\midrule
+DenseNet~\cite{veeling2018} & test & 0.955 & -- & -- & -- & -- & -- \\
+P4M~\cite{veeling2018} & test & 0.963 & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_training.png}
+\caption{ResNet-18 training. Left: loss. Right: validation AUC and recall at threshold 0.5, with the colour-only LR for reference. The dashed line marks the checkpoint selected by validation AUC.}
+\label{fig:training}
+\end{figure}
 
 \section{Analysis}
-\pending{Interpretation goes here once the ResNet-18 run finishes.}
+\textit{Colour is a strong shortcut.} A classifier that only sees colour statistics already reaches an AUC of 0.870, likely because tumour regions are denser in nuclei and therefore stain differently. The ResNet-18's extra 0.058 shows it also uses morphology, but the stain differences between hospitals (Fig.~\ref{fig:stain}) mean part of its signal may not survive a new scanner or staining protocol. This is exactly what RQ1 will test with synthetic HED/HSV shifts~\cite{tellez2019},~\cite{komen2026}.
+
+\textit{The CNN overfits quickly.} Validation loss rises after epoch 4 while training loss keeps falling, and the 16\% duplicates make the effective training set smaller than it looks. Selecting the checkpoint on validation AUC limits the damage; stronger augmentation, which RQ1 studies, should help further.
+
+\textit{Validation overestimates test performance.} The AUC drops by 0.033 from validation to test for the ResNet-18 but only by 0.015 for the LR. Validation slides are drawn from the same pool of 270 CAMELYON16 training slides as the training data, while test slides form the separate CAMELYON16 test set, so the more flexible model appears to gain more from slide-specific appearance. The gap to the 0.955 DenseNet of~\cite{veeling2018} is consistent with this overfitting and gives headroom for M3.
+
+\textit{The default threshold is wrong for the clinical goal.} AUC is stable across epochs (0.953--0.961) while validation recall at 0.5 swings between 0.72 and 0.84 (Fig.~\ref{fig:training}), so the operating point, not the ranking, causes most missed metastases. In M3 we will pick the threshold on validation for a target sensitivity and report test results with and without \texttt{test\_049}.
 
 \begin{thebibliography}{9}
 \bibitem{veeling2018} B. S. Veeling, J. Linmans, J. Winkens, T. Cohen, and M. Welling, ``Rotation equivariant CNNs for digital pathology,'' in \textit{Proc. MICCAI}, LNCS vol. 11071, 2018, pp. 210--218.

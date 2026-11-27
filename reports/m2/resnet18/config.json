@@ -1,0 +1,22 @@
+{
+  "name": "m2_baseline",
+  "scratch": false,
+  "label_frac": 1.0,
+  "aug": "geo",
+  "epochs": 10,
+  "batch_size": 256,
+  "lr": 0.0003,
+  "weight_decay": 0.0001,
+  "warmup_frac": 0.03,
+  "seed": 0,
+  "subset_seed": 0,
+  "amp": true,
+  "gpu_data": true,
+  "limit": 0,
+  "out": "/content/drive/MyDrive/DSM_PCam/runs",
+  "device": "cuda",
+  "gpu_name": "Tesla T4",
+  "torch": "2.14.1+cu130",
+  "n_train": 262144,
+  "steps_per_epoch": 1024
+}
